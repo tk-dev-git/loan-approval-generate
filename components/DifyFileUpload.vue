@@ -177,6 +177,7 @@ interface Props {
   acceptedTypes?: string[]
   maxSizeMB?: number
   placeholder?: string
+  modelValue?: string[]  // v-model対応: 外部からのファイルID配列
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -190,6 +191,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'upload-complete': [fileIds: string[]]
   'upload-error': [error: string]
+  'update:modelValue': [fileIds: string[]]  // v-model双方向バインディング
 }>()
 
 // Composableを使用
@@ -208,7 +210,16 @@ const {
 // ローカル状態
 const selectedFiles = ref<File[]>([])
 const isDragOver = ref(false)
-const uploadedFileIds = ref<string[]>([])
+
+// v-model対応: 外部状態との双方向バインディング
+const uploadedFileIds = computed({
+  get: () => props.modelValue || [],
+  set: (value: string[]) => {
+    emit('update:modelValue', value)
+    // デバッグログ
+    console.log('DifyFileUpload: Updated file IDs:', value)
+  }
+})
 
 // 計算プロパティ
 const allUploadStates = computed(() => getAllUploadStates())
@@ -252,11 +263,20 @@ const handleFileUpload = async (files: File[]) => {
       .map(result => result.success ? result.data.id : '')
       .filter(id => id !== '')
     
-    uploadedFileIds.value.push(...successfulIds)
+    // 新しいファイルIDを既存のものに追加
+    const newFileIds = [...uploadedFileIds.value, ...successfulIds]
+    uploadedFileIds.value = newFileIds
     
     if (successfulIds.length > 0) {
-      emit('upload-complete', uploadedFileIds.value)
+      emit('upload-complete', newFileIds)
     }
+    
+    // デバッグログ
+    console.log('DifyFileUpload: Files uploaded successfully:', {
+      newIds: successfulIds,
+      totalIds: newFileIds,
+      count: newFileIds.length
+    })
     
     // エラーがあった場合は通知
     const errors = results.filter(result => !result.success)
@@ -291,8 +311,11 @@ const retryUpload = async (index: number) => {
 // 全てクリア
 const clearAll = () => {
   clearUploadStates()
-  uploadedFileIds.value = []
+  uploadedFileIds.value = []  // computed setterを通じて親に通知
   selectedFiles.value = []
+  
+  // デバッグログ
+  console.log('DifyFileUpload: Cleared all files')
 }
 
 // ユーティリティ関数

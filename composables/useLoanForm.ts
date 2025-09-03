@@ -139,18 +139,38 @@ export const useLoanForm = () => {
     }
   }
   
-  // フォーム送信用データ作成
-  const createFormData = (): FormData => {
+  // Dify Workflow API用データ作成（JSON形式）
+  const createDifyWorkflowData = (fileIds: string[] = []) => {
+    // Dify Workflow APIに送信するJSONデータを作成
+    console.log('createDifyWorkflowData: Creating data with fileIds:', fileIds)
+    
+    return {
+      formData: {
+        // 基本フィールド（nullや空文字列を除外）
+        ...Object.fromEntries(
+          Object.entries(formData).filter(([key, value]) => 
+            key !== 'settlement' && value !== null && value !== ''
+          )
+        )
+      },
+      fileIds  // アップロード済みファイルID配列
+    }
+  }
+  
+  // SSE API用データ作成（FormData形式）
+  const createSSEFormData = (): FormData => {
+    console.log('createSSEFormData: Creating FormData for SSE API')
     const formDataToSend = new FormData()
     
     // 基本フィールド
     Object.entries(formData).forEach(([key, value]) => {
       if (key === 'settlement') {
-        // ファイルは個別に追加
+        // SSE API用: ファイルは個別に追加
+        // 注意: ここではFile[]として処理する必要がある
         if (Array.isArray(value)) {
-          value.forEach((file) => {
-            formDataToSend.append('settlement', file)
-          })
+          // valueがstring[]（ファイルID）の場合のフォールバック
+          console.warn('SSE API: Cannot send file IDs, need actual File objects')
+          console.log('Settlement value type:', typeof value[0], value)
         }
       } else if (value !== null && value !== '') {
         formDataToSend.append(key, String(value))
@@ -226,7 +246,8 @@ export const useLoanForm = () => {
     // 関数
     validateForm,
     validateSingleField,
-    createFormData,
+    createDifyWorkflowData,  // Dify Workflow API用
+    createSSEFormData,       // SSE API用（旧createFormData）
     loadFromStorage,
     saveToStorage,
     resetForm,

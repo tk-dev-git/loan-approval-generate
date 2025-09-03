@@ -139,6 +139,7 @@
                     <!-- ファイル選択 -->
                     <div v-else-if="field.type === 'file-list'">
                       <DifyFileUpload
+                        v-model="uploadedFileIds"
                         :title="field.label"
                         :multiple="true"
                         :accepted-types="['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']"
@@ -203,25 +204,14 @@
             @reset="resetWorkflow"
           />
 
-          <!-- 稟議書出力エリア -->
-          <v-card
-            class="report-output-card"
-            :height="workflowExecutionState.status !== 'idle' ? '300' : '400'"
-            :style="reportCardStyle"
-          >
-            <v-card-text class="d-flex align-end fill-height pa-6">
-              <div class="report-content">
-                <div
-                  v-if="reportOutput"
-                  class="report-text"
-                  v-html="formatReportOutput(reportOutput)"
-                />
-                <p v-else class="placeholder-text">
-                  {{ defaultMessage }}
-                </p>
-              </div>
-            </v-card-text>
-          </v-card>
+          <!-- ストリーミングMarkdown表示コンポーネント -->
+          <DifyStreamingMarkdown
+            :content="streamingReportText"
+            :is-streaming="isStreaming"
+            :show-actions="true"
+            :auto-scroll="true"
+            class="report-markdown-viewer"
+          />
         </div>
       </v-col>
     </v-row>
@@ -242,7 +232,8 @@ const {
   sectionCompletionStatus,
   validateForm,
   validateSingleField,
-  createFormData,
+  createDifyWorkflowData,  // 新しい関数
+  createSSEFormData,       // リネームされた関数
   loadFromStorage,
   saveToStorage,
   resetForm,
@@ -258,12 +249,18 @@ const {
   isExecuting,
   isCompleted,
   hasError,
-  result: workflowResult
+  result: workflowResult,
+  streamingText,  // 追加
+  setOnTextChunk  // 追加
 } = useDifyWorkflow()
 
 // ローカル状態
 const expandedPanels = ref<number[]>([0, 1]) // デフォルトで最初の2つのパネルを展開
 const uploadedFileIds = ref<string[]>([])
+
+// ストリーミング関連の状態
+const streamingReportText = ref('')
+const isStreaming = ref(false)
 
 
 // メッセージ
@@ -295,13 +292,32 @@ const clearFieldError = (fieldName: keyof typeof formData) => {
 // Dify ファイルアップロード関連のイベントハンドラー
 const onFileUploadComplete = (fileIds: string[]) => {
   uploadedFileIds.value = fileIds
+  
+  // formData.settlementにもファイルID情報を同期
+  // 注意: 型定義上はFile[]だが、実際の運用ではファイルIDで管理
+  formData.settlement = fileIds as any
+  
   // 既存のエラーをクリア
   clearFieldError('settlement')
+  
+  // デバッグログ
+  console.log('index.vue: File upload completed:', {
+    fileIds,
+    uploadedFileIdsValue: uploadedFileIds.value,
+    formDataSettlement: formData.settlement,
+    fileCount: fileIds.length
+  })
 }
 
 const onFileUploadError = (error: string) => {
-  console.error('File upload error:', error)
-  // エラー表示のロジックを追加可能
+  console.error('index.vue: File upload error:', error)
+  
+  // ファイルアップロードエラー時の状態リセット
+  uploadedFileIds.value = []
+  formData.settlement = []
+  
+  // エラー表示のロジック（将来的にSnackbar等で通知可能）
+  console.error('ファイルアップロードでエラーが発生しました:', error)
 }
 
 const clearForm = () => {
@@ -333,42 +349,68 @@ const generateReport = async () => {
     return
   }
 
+  // ファイルIDの存在確認とデバッグログ
+  console.log('generateReport: Starting report generation with:', {
+    formDataFields: Object.keys(formData).filter(([key, value]) => value !== null && value !== ''),
+    uploadedFileIds: uploadedFileIds.value,
+    fileCount: uploadedFileIds.value.length,
+    formDataSettlement: formData.settlement
+  })
+  
+  if (uploadedFileIds.value.length === 0) {
+    console.warn('generateReport: No uploaded files found, proceeding without files')
+  }
+
   isGenerating.value = true
-  reportOutput.value = ''
+  streamingReportText.value = ''  // ストリーミングテキストをクリア
 
   try {
-    // Dify Workflowを実行
+    // Dify Workflowを実行（最新のファイルIDで）
+    console.log('generateReport: Executing Dify Workflow with fileIds:', uploadedFileIds.value)
     const success = await executeWorkflow(
       formData,
       uploadedFileIds.value,
       {
         onProgress: (state) => {
-          // 進捗状況は自動的にワークフロー進捗コンポーネントに反映される
           console.log('Workflow progress:', state)
         },
         onEvent: (event) => {
           console.log('Workflow event:', event)
-          // イベントタイプに応じて処理を追加可能
+        },
+        onTextChunk: (fullText, chunk) => {
+          // text_chunkイベントのコールバック
+          streamingReportText.value = fullText
+          isStreaming.value = true
+          console.log('generateReport: Received text chunk, total length:', fullText.length)
         }
       }
     )
 
-    if (success && workflowResult.value) {
-      // ワークフロー結果から稟議書テキストを抽出
-      if (workflowResult.value.loan_report || workflowResult.value.report || workflowResult.value.output) {
-        reportOutput.value = workflowResult.value.loan_report || workflowResult.value.report || workflowResult.value.output
-      } else {
-        // フォールバック: 結果全体をJSONとして表示
-        reportOutput.value = JSON.stringify(workflowResult.value, null, 2)
+    if (success) {
+      isStreaming.value = false
+      
+      // 最終結果をストリーミングテキストに設定（必要に応じて）
+      if (!streamingReportText.value && workflowResult.value) {
+        const finalResult = workflowResult.value.streamingOutput || 
+                           workflowResult.value.loan_report || 
+                           workflowResult.value.report || 
+                           workflowResult.value.output || ''
+        streamingReportText.value = finalResult
       }
+      
+      // 既存のreportOutputも更新（後方互換性のため）
+      reportOutput.value = streamingReportText.value
     }
 
   } catch (err: any) {
     console.error('Dify workflow error:', err)
+    isStreaming.value = false
     
     // フォールバック: 従来のSSE方式を使用
+    console.log('generateReport: Dify Workflow failed, falling back to SSE API')
     try {
-      const formDataToSend = createFormData()
+      const formDataToSend = createSSEFormData()
+      console.log('generateReport: Created SSE FormData, starting EventSource')
       
       const { data, error, close } = useEventSource('/api/generate-report', {
         method: 'POST',
@@ -381,6 +423,7 @@ const generateReport = async () => {
             const parsed = JSON.parse(newData)
             if (parsed.content) {
               reportOutput.value += parsed.content
+              streamingReportText.value = reportOutput.value
             }
             if (parsed.done) {
               close()
@@ -422,11 +465,23 @@ const cancelWorkflow = () => {
 const resetWorkflow = () => {
   resetWorkflowState()
   reportOutput.value = ''
+  streamingReportText.value = ''
+  isStreaming.value = false
 }
+
+// ストリーミング状態を監視
+watch(() => streamingText.value.isStreaming, (streaming) => {
+  isStreaming.value = streaming
+})
 
 // ライフサイクル
 onMounted(() => {
   loadFromStorage()
+  
+  // ストリーミングテキストのコールバックを設定
+  setOnTextChunk((text: string) => {
+    streamingReportText.value = text
+  })
 })
 </script>
 
@@ -492,36 +547,9 @@ onMounted(() => {
 }
 
 
-.report-output-card {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.report-content {
-  width: 100%;
-  color: white;
-}
-
-.report-text {
-  font-size: 1rem;
-  line-height: 1.6;
-}
-
-.placeholder-text {
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: white;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-  margin: 0;
-}
-
-:deep(.report-heading) {
-  font-size: 1.2rem;
-  font-weight: 700;
-  margin: 16px 0 8px 0;
-  color: #FF6B35;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+.report-markdown-viewer {
+  height: calc(100vh - 250px);
+  min-height: 500px;
 }
 
 /* レスポンシブ */

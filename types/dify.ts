@@ -49,6 +49,20 @@ export interface DifyWorkflowRequest {
 }
 
 /**
+ * text_chunk イベント（ストリーミングテキスト）
+ */
+export interface DifyTextChunkEvent {
+  event: 'text_chunk'
+  task_id: string
+  message_id: string
+  data: {
+    text: string  // チャンクテキスト
+    position?: number  // テキストの位置（オプション）
+    delta?: string  // 差分テキスト（オプション）
+  }
+}
+
+/**
  * Dify Workflow API のストリーミングレスポンス（イベントタイプ）
  */
 export type DifyWorkflowStreamEvent = 
@@ -56,6 +70,7 @@ export type DifyWorkflowStreamEvent =
   | DifyNodeStartEvent
   | DifyNodeFinishEvent
   | DifyWorkflowFinishEvent
+  | DifyTextChunkEvent  // 追加
   | DifyTTSMessageEvent
   | DifyTTSMessageEndEvent
   | DifyErrorEvent
@@ -235,11 +250,22 @@ export interface FileUploadOptions {
 }
 
 /**
+ * ストリーミングテキスト状態
+ */
+export interface StreamingTextState {
+  fullText: string  // 蓄積された全テキスト
+  chunks: string[]  // 受信したチャンクの配列
+  isStreaming: boolean  // ストリーミング中かどうか
+  lastUpdateTime: number  // 最終更新時刻
+}
+
+/**
  * ワークフロー実行のオプション
  */
 export interface WorkflowExecutionOptions {
   onProgress?: (state: WorkflowExecutionState) => void
   onEvent?: (event: DifyWorkflowStreamEvent) => void
+  onTextChunk?: (fullText: string, chunk: string) => void  // 追加
   timeout?: number
   user?: string
 }

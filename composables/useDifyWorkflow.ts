@@ -2,7 +2,8 @@
 import type { 
   WorkflowExecutionState, 
   WorkflowExecutionOptions, 
-  DifyWorkflowStreamEvent 
+  DifyWorkflowStreamEvent,
+  StreamingTextState
 } from '~/types/dify'
 import type { LoanApplicationForm } from '~/types/loan-application'
 
@@ -24,6 +25,17 @@ export const useDifyWorkflow = () => {
   
   // エラー情報
   const error = ref<string | null>(null)
+
+  // ストリーミングテキスト状態
+  const streamingText = ref<StreamingTextState>({
+    fullText: '',
+    chunks: [],
+    isStreaming: false,
+    lastUpdateTime: Date.now()
+  })
+
+  // text_chunkコールバック用の関数
+  const onTextChunk = ref<((text: string) => void) | null>(null)
 
   /**
    * ワークフローを実行
@@ -178,6 +190,31 @@ export const useDifyWorkflow = () => {
           })
           break
           
+        case 'text_chunk':
+          // text_chunkイベントの処理
+          if ('data' in difyEvent && difyEvent.data) {
+            const chunkText = difyEvent.data.text || ''
+            
+            // ストリーミングテキスト状態を更新
+            streamingText.value = {
+              fullText: streamingText.value.fullText + chunkText,
+              chunks: [...streamingText.value.chunks, chunkText],
+              isStreaming: true,
+              lastUpdateTime: Date.now()
+            }
+            
+            // コールバック呼び出し
+            onTextChunk.value?.(streamingText.value.fullText)
+            options.onTextChunk?.(streamingText.value.fullText, chunkText)
+            
+            // 進捗状態を更新（ストリーミング中は徐々に進捗を増加）
+            updateExecutionState({
+              currentStep: 'レポート生成中...',
+              progress: Math.min(90, executionState.value.progress + 0.5)
+            })
+          }
+          break
+          
         case 'node_started':
           if ('data' in difyEvent && difyEvent.data) {
             updateExecutionState({
@@ -199,14 +236,22 @@ export const useDifyWorkflow = () => {
           break
           
         case 'workflow_finished':
+          // ワークフロー完了時にストリーミングを終了
+          streamingText.value.isStreaming = false
+          
           if ('data' in difyEvent && difyEvent.data) {
             if (difyEvent.data.status === 'succeeded') {
-              result.value = difyEvent.data.outputs
+              // 最終テキストがある場合は結果に設定
+              result.value = {
+                ...difyEvent.data.outputs,
+                streamingOutput: streamingText.value.fullText || difyEvent.data.outputs?.result
+              }
+              
               updateExecutionState({
                 status: 'completed',
                 progress: 100,
                 currentStep: 'ワークフロー完了',
-                result: difyEvent.data.outputs,
+                result: result.value,
                 elapsedTime: difyEvent.data.elapsed_time,
                 totalTokens: difyEvent.data.total_tokens
               })
@@ -226,6 +271,7 @@ export const useDifyWorkflow = () => {
           if ('data' in difyEvent && difyEvent.data) {
             const errorMessage = difyEvent.data.message || 'ワークフローエラーが発生しました'
             error.value = errorMessage
+            streamingText.value.isStreaming = false
             updateExecutionState({
               status: 'error',
               currentStep: 'エラーが発生しました',
@@ -262,6 +308,14 @@ export const useDifyWorkflow = () => {
     eventLog.value = []
     result.value = null
     error.value = null
+    
+    // ストリーミングテキスト状態もリセット
+    streamingText.value = {
+      fullText: '',
+      chunks: [],
+      isStreaming: false,
+      lastUpdateTime: Date.now()
+    }
   }
 
   /**
@@ -276,7 +330,17 @@ export const useDifyWorkflow = () => {
         error: 'ユーザーによってキャンセルされました'
       })
       error.value = 'ユーザーによってキャンセルされました'
+      
+      // ストリーミング状態もリセット
+      streamingText.value.isStreaming = false
     }
+  }
+
+  /**
+   * text_chunkコールバックを設定
+   */
+  const setOnTextChunk = (callback: (text: string) => void) => {
+    onTextChunk.value = callback
   }
 
   /**
@@ -312,12 +376,14 @@ export const useDifyWorkflow = () => {
     eventLog: readonly(eventLog),
     result: readonly(result),
     error: readonly(error),
+    streamingText: readonly(streamingText),  // 追加
     executeWorkflow,
     resetState,
     cancelExecution,
     progressPercentage,
     isExecuting,
     isCompleted,
-    hasError
+    hasError,
+    setOnTextChunk  // 追加
   }
 }
