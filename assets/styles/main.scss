@@ -1,0 +1,112 @@
+// assets/styles/main.scss
+
+// フォーム専用スタイルをインポート
+@use './form.scss';
+
+html {
+    font-family: 'Be Vietnam Pro', 'Noto Sans', sans-serif !important;
+}
+
+body {
+    background-color: #fcf9f8;
+}
+
+// カスタムスタイル
+.custom-select {
+    background-image: url('data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724px%27 height=%2724px%27 fill=%27rgb(161,93,69)%27 viewBox=%270 0 256 256%27%3e%3cpath d=%27M181.66,170.34a8,8,0,0,1,0,11.32l-48,48a8,8,0,0,1-11.32,0l-48-48a8,8,0,0,1,11.32-11.32L128,212.69l42.34-42.35A8,8,0,0,1,181.66,170.34Zm-96-84.68L128,43.31l42.34,42.35a8,8,0,0,0,11.32-11.32l-48-48a8,8,0,0,0-11.32,0l-48,48A8,8,0,0,0,85.66,85.66Z%27%3e%3c/path%3e%3c/svg%3e');
+    background-position: right 15px center;
+    background-repeat: no-repeat;
+    background-size: 20px;
+}
+
+.custom-border {
+    border: 1px solid #ead5cd;
+}
+
+.tab-active {
+    border-bottom: 3px solid #ff6b35 !important;
+    color: #1d110c !important;
+}
+
+.tab-inactive {
+    border-bottom: 3px solid transparent;
+    color: #a15d45;
+}
+
+// // トグルスイッチのカスタムスタイル
+// .custom-switch {
+//     .v-switch__track {
+//         background-color: #f4eae6 !important;
+//         opacity: 1 !important;
+//     }
+
+//     .v-switch--inset .v-switch__track {
+//         height: 31px;
+//         width: 51px;
+//     }
+
+//     .v-switch__thumb {
+//         height: 27px !important;
+//         width: 27px !important;
+//         box-shadow: rgba(0, 0, 0, 0.15) 0px 3px 8px, rgba(0, 0, 0, 0.06) 0px 3px 1px !important;
+//     }
+
+//     &.v-input--active {
+//         .v-switch__track {
+//             background-color: #ff6b35 !important;
+//         }
+//     }
+// }
+
+// カスタムトグルボタンスタイル
+.custom-toggle-btn {
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+    min-width: 0 !important;
+    padding: 8px 12px !important;
+    // flex: 1 1 0 !important; // 全ボタンを同じ幅に
+    flex: 0 0 auto !important; // flexを自動サイズに変更
+    width: 70% !important; // 明示的に幅を70%に設定
+    max-width: 120px !important; // 最大幅を制限（オプション）
+    margin: 0 4px !important; // ボタン間に適切な余白
+
+    // 非選択状態
+    &:not(.active) {
+        background-color: transparent !important;
+        border: 1px solid #ead5cd !important;
+        color: #a15d45 !important;
+
+        &:hover {
+            background-color: #f4eae6 !important;
+            border-color: #a15d45 !important;
+        }
+    }
+
+    // 選択状態
+    &.active {
+        background-color: #ff6b35 !important;
+        color: white !important;
+        border: 1px solid #ff6b35 !important;
+        box-shadow: rgba(255, 107, 53, 0.2) 0px 2px 8px !important;
+
+        &:hover {
+            background-color: #e55a2b !important;
+        }
+    }
+
+    // フォーカス状態
+    &:focus-visible {
+        outline: 2px solid #ff6b35;
+        outline-offset: 2px;
+    }
+
+    // 最初と最後のボタンのマージン調整
+    &:first-child {
+        margin-left: 0 !important;
+    }
+
+    &:last-child {
+        margin-right: 0 !important;
+    }
+}

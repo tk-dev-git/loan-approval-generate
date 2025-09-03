@@ -1,0 +1,234 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Misc
+.DS_Store
+.fleet
+.idea
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# IDE - IntelliJ/WebStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Testing
+coverage
+*.lcov
+.nyc_output
+
+# Local env files
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Package manager files
+yarn.lock
+pnpm-lock.yaml
+.pnpm-store/
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Build files
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid.lock
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Yarn v2+
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Parcel cache
+.parcel-cache
+
+# Next.js build output
+.next
+out
+
+# Gatsby files
+.cache/
+public
+
+# VuePress build output
+.vuepress/dist
+
+# Storybook
+storybook-static
+
+# Electron
+dist_electron
+
+# Local development certificates
+*.pem
+*.key
+*.crt
+*.p12
+
+# Debug
+debug/
+
+# MCP and Serena specific (ローカル開発環境固有)
+.serena/
+.mcp.json
+
+# Documents that might contain sensitive information
+documents/*.pdf
+documents/*.doc
+documents/*.docx
+!documents/README.md
+
+# Test files that might be temporary
+test_*.js
+test_*.ts
+!test/**/*.js
+!test/**/*.ts
+
+# Backup files
+*.bak
+*.backup
+*_backup
+*_old
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Log directories
+logs/
+*.log
+
+# Generated documentation
+docs/_build/
+docs/.vuepress/dist/
+
+# Python (if using any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Ruby (if using any Ruby scripts)
+*.gem
+*.rbc
+.bundle
+vendor/bundle
+
+# Terraform (if using infrastructure as code)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Docker (if using containers)
+docker-compose.override.yml
+.dockerignore
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Claude Code
+.serena/
