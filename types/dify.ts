@@ -49,14 +49,17 @@ export interface DifyWorkflowRequest {
 }
 
 /**
- * text_chunk イベント（ストリーミングテキスト）
+ * text_chunk イベント（リアルタイムテキスト生成）
+ * 公式仕様: data: {"event": "text_chunk", "task_id": "...", "data": {"text": "..."}}
  */
 export interface DifyTextChunkEvent {
   event: 'text_chunk'
   task_id: string
-  message_id: string
+  workflow_run_id?: string  // Workflowでは含まれる
+  message_id?: string       // Chatでは含まれる
   data: {
     text: string  // チャンクテキスト
+    from_variable_selector?: string[]  // テキストの出力元ノード情報（Workflow用）
     position?: number  // テキストの位置（オプション）
     delta?: string  // 差分テキスト（オプション）
   }
@@ -209,20 +212,21 @@ export interface DifyPingEvent {
 }
 
 /**
- * ワークフロー実行状態
+ * ワークフロー実行状態（Dify標準フィールド対応）
  */
 export interface WorkflowExecutionState {
   status: 'idle' | 'uploading' | 'processing' | 'completed' | 'error'
   progress: number
   currentStep: string
-  taskId?: string
-  workflowRunId?: string
+  taskId?: string          // Dify task_id
+  workflowRunId?: string   // Dify workflow_run_id
+  messageId?: string       // Dify message_id (chat用)
   error?: string
   result?: any
   totalSteps: number
   currentStepIndex: number
-  elapsedTime?: number
-  totalTokens?: number
+  elapsedTime?: number     // Dify elapsed_time
+  totalTokens?: number     // Dify total_tokens
 }
 
 /**

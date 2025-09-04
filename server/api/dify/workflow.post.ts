@@ -158,7 +158,7 @@ async function executeWorkflow(
   baseUrl: string
 ) {
   try {
-    // 開始イベントを送信
+    // 開始イベントを送信（標準形式）
     await stream.push({
       event: 'workflow_started',
       data: JSON.stringify({
@@ -166,8 +166,7 @@ async function executeWorkflow(
       })
     })
 
-    // Dify Workflow APIを呼び出し（ストリーミング）
-    // workflowIdを使わない一般的なworkflows/runエンドポイントを使用
+    // Dify Workflow API呼び出し（ストリーミング）
     const response = await $fetch.raw<ReadableStream>('/workflows/run', {
       method: 'POST',
       baseURL: baseUrl,
@@ -187,6 +186,7 @@ async function executeWorkflow(
     // ReadableStreamを処理
     const reader = response._data.getReader()
     const decoder = new TextDecoder()
+    let eventBuffer = ''  // ダブル改行分離用のバッファ
 
     try {
       while (true) {
@@ -198,62 +198,59 @@ async function executeWorkflow(
 
         // チャンクを文字列に変換
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+        eventBuffer += chunk
+        
+        // ダブル改行でイベントを分離
+        const events = eventBuffer.split('\n\n')
+        eventBuffer = events.pop() || ''  // 未完了部分をバッファに保持
 
-        for (const line of lines) {
-          if (line.trim() === '') continue
+        for (const eventBlock of events) {
+          if (eventBlock.trim() === '') continue
           
-          // SSEフォーマットをパース
-          if (line.startsWith('data: ')) {
-            const eventData = line.slice(6).trim()
-            
-            if (eventData === '[DONE]') {
-              // 完了イベントを送信
-              await stream.push({
-                event: 'workflow_completed',
-                data: JSON.stringify({
-                  message: 'ワークフローが完了しました',
-                  timestamp: new Date().toISOString()
-                })
-              })
-              break
-            }
-
-            try {
-              // DifyのイベントデータをパースしてSSEで転送
-              console.log('Workflow API: Parsing event data, length:', eventData.length)
-              const difyEvent: DifyWorkflowStreamEvent = JSON.parse(eventData)
+          const lines = eventBlock.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const eventData = line.slice(6).trim()
               
-              // text_chunkイベントの特別処理
-              if (difyEvent.event === 'text_chunk') {
+              if (eventData === '[DONE]') {
+                // 完了イベントを送信
                 await stream.push({
-                  event: 'text_chunk',
+                  event: 'workflow_completed',
                   data: JSON.stringify({
-                    difyEvent,
-                    timestamp: new Date().toISOString(),
-                    // チャンクテキストを明示的に含める
-                    text: difyEvent.data?.text || ''
-                  })
-                })
-              } else {
-                // その他のイベントは従来通り転送
-                await stream.push({
-                  event: difyEvent.event,
-                  data: JSON.stringify({
-                    difyEvent,
+                    message: 'ワークフローが完了しました',
                     timestamp: new Date().toISOString()
                   })
                 })
+                return  // 処理終了
               }
 
-              // エラーイベントの場合は処理を終了
-              if (difyEvent.event === 'error') {
-                break
-              }
+              try {
+                // Difyイベントを直接転送（標準SSE形式）
+                console.log('Workflow API: Processing Dify event, length:', eventData.length)
+                const difyEvent: DifyWorkflowStreamEvent = JSON.parse(eventData)
+                
+                // 全てのDifyイベントを標準形式で転送
+                await stream.push({
+                  event: difyEvent.event,
+                  data: JSON.stringify(difyEvent)  // 元のDifyイベント構造を保持
+                })
 
-            } catch (parseError) {
-              console.warn('Failed to parse Dify event:', eventData, parseError)
-              // パースエラーは無視して続行
+                // エラーイベントの場合は処理を終了
+                if (difyEvent.event === 'error') {
+                  console.error('Dify workflow error:', difyEvent)
+                  return
+                }
+                
+                // workflow_finishedで正常終了
+                if (difyEvent.event === 'workflow_finished') {
+                  console.log('Workflow finished:', difyEvent.data?.status)
+                  return
+                }
+
+              } catch (parseError) {
+                console.warn('Failed to parse Dify event:', eventData, parseError)
+                // パースエラーは無視して続行
+              }
             }
           }
         }
@@ -265,12 +262,13 @@ async function executeWorkflow(
   } catch (error: any) {
     console.error('Workflow execution failed:', error)
     
-    // エラーイベントを送信
+    // 標準エラーイベントを送信
     await stream.push({
       event: 'error',
       data: JSON.stringify({
-        code: 'WORKFLOW_ERROR',
-        message: 'ワークフローの実行に失敗しました',
+        status: error.statusCode || 500,
+        code: 'WORKFLOW_EXECUTION_ERROR',
+        message: 'ワークフローの実行中にエラーが発生しました',
         details: error.message || error
       })
     })
