@@ -106,7 +106,7 @@ export const FORM_SECTIONS: FormSection[] = [
     title: '融資申込',
     fields: [
       { label: '申込金額（百万円）', variable: 'loan_amount', type: 'number', maxLength: 48, required: false },
-      { label: '使途分類', variable: 'usage_type', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.usage_type },
+      { label: '使途分類', variable: 'usage_type', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.usage_type as unknown as string[] },
       { label: '具体的使途', variable: 'specific_usage', type: 'paragraph', maxLength: 1024, required: false },
       { label: '必要時期', variable: 'required_timing', type: 'text-input', maxLength: 256, required: false },
       { label: '資金計画詳細', variable: 'funding_plan_details', type: 'paragraph', maxLength: 1024, required: false },
@@ -117,9 +117,9 @@ export const FORM_SECTIONS: FormSection[] = [
     fields: [
       { label: '借入期間（年）', variable: 'loan_term', type: 'number', maxLength: 48, required: false },
       { label: '据置期間（ヶ月）', variable: 'grace_period', type: 'number', maxLength: 48, required: false },
-      { label: '返済方法', variable: 'repayment_method', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.repayment_method },
+      { label: '返済方法', variable: 'repayment_method', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.repayment_method as unknown as string[] },
       { label: '金利条件（％）', variable: 'interest_rate', type: 'number', maxLength: 48, required: false },
-      { label: '金利タイプ', variable: 'rate_type', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.rate_type },
+      { label: '金利タイプ', variable: 'rate_type', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.rate_type as unknown as string[] },
       { label: '返済原資', variable: 'repayment_source', type: 'paragraph', maxLength: 1024, required: false },
       { label: '希望実行日', variable: 'desired_execution_date', type: 'text-input', maxLength: 256, required: false },
     ],
@@ -127,7 +127,7 @@ export const FORM_SECTIONS: FormSection[] = [
   {
     title: '担保・保証',
     fields: [
-      { label: '担保種類', variable: 'collateral_type', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.collateral_type },
+      { label: '担保種類', variable: 'collateral_type', type: 'select', maxLength: 48, required: false, options: SELECT_OPTIONS.collateral_type as unknown as string[] },
       { label: '担保詳細', variable: 'collateral_details', type: 'paragraph', maxLength: 1024, required: false },
       { label: '評価額（百万円）', variable: 'collateral_value', type: 'number', maxLength: 48, required: false },
       { label: '設定順位', variable: 'collateral_rank', type: 'text-input', maxLength: 256, required: false },

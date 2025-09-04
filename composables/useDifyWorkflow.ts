@@ -58,7 +58,7 @@ export const useDifyWorkflow = () => {
         currentStepIndex: 0
       }
 
-      // 簡易的なSSE実装（POSTサポート）
+      // 標準SSE実装（POST サポート）
       const response = await fetch('/api/dify/workflow', {
         method: 'POST',
         headers: {
@@ -96,6 +96,7 @@ export const useDifyWorkflow = () => {
 
           const reader = response.body.getReader()
           const decoder = new TextDecoder()
+          let streamBuffer = ''  // ダブル改行分離用バッファ
 
           try {
             while (true) {
@@ -107,31 +108,38 @@ export const useDifyWorkflow = () => {
 
               // チャンクを文字列に変換
               const chunk = decoder.decode(value, { stream: true })
-              const lines = chunk.split('\n')
+              streamBuffer += chunk
+              
+              // ダブル改行でイベントを分離
+              const events = streamBuffer.split('\n\n')
+              streamBuffer = events.pop() || ''  // 未完了部分をバッファに保持
 
-              for (const line of lines) {
-                if (line.trim() === '') continue
+              for (const eventBlock of events) {
+                if (eventBlock.trim() === '') continue
                 
-                // SSEフォーマットをパース
-                if (line.startsWith('data: ')) {
-                  const eventData = line.slice(6).trim()
-                  
-                  if (eventData === '[DONE]') {
-                    clearTimeout(timeoutId)
-                    resolve(true)
-                    return
-                  }
+                const lines = eventBlock.split('\n')
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const eventData = line.slice(6).trim()
+                    
+                    if (eventData === '[DONE]') {
+                      clearTimeout(timeoutId)
+                      resolve(true)
+                      return
+                    }
 
-                  try {
-                    const data = JSON.parse(eventData)
-                    handleWorkflowEvent(data, options)
-                  } catch (parseError) {
-                    console.warn('Failed to parse SSE data:', eventData, parseError)
+                    try {
+                      // 標準SSE形式でイベントをパース
+                      const event = JSON.parse(eventData) as DifyWorkflowStreamEvent
+                      handleWorkflowEvent(event, options)  // 直接イベントを渡す
+                    } catch (parseError) {
+                      console.warn('Failed to parse SSE data:', eventData, parseError)
+                    }
+                  } else if (line.startsWith('event: ')) {
+                    // イベントタイプの処理
+                    const eventType = line.slice(7).trim()
+                    console.log('SSE event type:', eventType)
                   }
-                } else if (line.startsWith('event: ')) {
-                  // イベントタイプの処理
-                  const eventType = line.slice(7).trim()
-                  console.log('SSE event type:', eventType)
                 }
               }
             }
@@ -170,121 +178,131 @@ export const useDifyWorkflow = () => {
   }
 
   /**
-   * ワークフローイベントを処理
+   * ワークフローイベントを処理（標準化）
    */
-  const handleWorkflowEvent = (data: any, options: WorkflowExecutionOptions) => {
+  const handleWorkflowEvent = (event: DifyWorkflowStreamEvent, options: WorkflowExecutionOptions) => {
     // イベントログに追加
-    if (data.difyEvent) {
-      eventLog.value.push(data.difyEvent)
-      options.onEvent?.(data.difyEvent)
-      
-      const difyEvent = data.difyEvent as DifyWorkflowStreamEvent
-      
-      // イベントタイプに応じて状態を更新
-      switch (difyEvent.event) {
-        case 'workflow_started':
+    eventLog.value.push(event)
+    options.onEvent?.(event)
+    
+    // イベントタイプに応じて状態を更新
+    switch (event.event) {
+      case 'workflow_started':
+        updateExecutionState({
+          status: 'processing',
+          currentStep: 'ワークフロー開始',
+          progress: 5,
+          taskId: event.task_id,
+          workflowRunId: event.workflow_run_id
+        })
+        break
+        
+      case 'text_chunk':
+        // text_chunkイベントの標準処理
+        if (event.data?.text) {
+          const chunkText = event.data.text
+          
+          // ストリーミングテキスト状態を更新
+          streamingText.value = {
+            fullText: streamingText.value.fullText + chunkText,
+            chunks: [...streamingText.value.chunks, chunkText],
+            isStreaming: true,
+            lastUpdateTime: Date.now()
+          }
+          
+          // コールバック呼び出し
+          onTextChunk.value?.(streamingText.value.fullText)
+          options.onTextChunk?.(streamingText.value.fullText, chunkText)
+          
+          // 進捗状態を更新（ストリーミング中は徐々に進捗を増加）
           updateExecutionState({
-            status: 'processing',
-            currentStep: 'ワークフロー開始',
-            progress: 5
+            currentStep: 'レポート生成中...',
+            progress: Math.min(90, executionState.value.progress + 0.5)
           })
-          break
-          
-        case 'text_chunk':
-          // text_chunkイベントの処理
-          if ('data' in difyEvent && difyEvent.data) {
-            const chunkText = difyEvent.data.text || ''
-            
-            // ストリーミングテキスト状態を更新
-            streamingText.value = {
-              fullText: streamingText.value.fullText + chunkText,
-              chunks: [...streamingText.value.chunks, chunkText],
-              isStreaming: true,
-              lastUpdateTime: Date.now()
+        }
+        break
+        
+      case 'node_started':
+        if (event.data) {
+          updateExecutionState({
+            currentStep: `${event.data.title}を実行中...`,
+            currentStepIndex: event.data.index,
+            totalSteps: Math.max(executionState.value.totalSteps, event.data.index + 1),
+            progress: Math.min(90, 10 + (event.data.index * 80 / 10))
+          })
+        }
+        break
+        
+      case 'node_finished':
+        if (event.data) {
+          updateExecutionState({
+            currentStep: `${event.data.title}完了`,
+            progress: Math.min(95, 20 + (event.data.index * 75 / 10))
+          })
+        }
+        break
+        
+      case 'workflow_finished':
+        // ワークフロー完了時にストリーミングを終了
+        streamingText.value.isStreaming = false
+        
+        if (event.data) {
+          if (event.data.status === 'succeeded') {
+            // 成功時の結果処理
+            result.value = {
+              ...event.data.outputs,
+              streamingOutput: streamingText.value.fullText || event.data.outputs?.result
             }
             
-            // コールバック呼び出し
-            onTextChunk.value?.(streamingText.value.fullText)
-            options.onTextChunk?.(streamingText.value.fullText, chunkText)
-            
-            // 進捗状態を更新（ストリーミング中は徐々に進捗を増加）
             updateExecutionState({
-              currentStep: 'レポート生成中...',
-              progress: Math.min(90, executionState.value.progress + 0.5)
+              status: 'completed',
+              progress: 100,
+              currentStep: 'ワークフロー完了',
+              result: result.value,
+              elapsedTime: event.data.elapsed_time,
+              totalTokens: event.data.total_tokens
             })
-          }
-          break
-          
-        case 'node_started':
-          if ('data' in difyEvent && difyEvent.data) {
-            updateExecutionState({
-              currentStep: `${difyEvent.data.title}を実行中...`,
-              currentStepIndex: difyEvent.data.index,
-              totalSteps: Math.max(executionState.value.totalSteps, difyEvent.data.index + 1),
-              progress: Math.min(90, 10 + (difyEvent.data.index * 80 / 10))
-            })
-          }
-          break
-          
-        case 'node_finished':
-          if ('data' in difyEvent && difyEvent.data) {
-            updateExecutionState({
-              currentStep: `${difyEvent.data.title}完了`,
-              progress: Math.min(95, 20 + (difyEvent.data.index * 75 / 10))
-            })
-          }
-          break
-          
-        case 'workflow_finished':
-          // ワークフロー完了時にストリーミングを終了
-          streamingText.value.isStreaming = false
-          
-          if ('data' in difyEvent && difyEvent.data) {
-            if (difyEvent.data.status === 'succeeded') {
-              // 最終テキストがある場合は結果に設定
-              result.value = {
-                ...difyEvent.data.outputs,
-                streamingOutput: streamingText.value.fullText || difyEvent.data.outputs?.result
-              }
-              
-              updateExecutionState({
-                status: 'completed',
-                progress: 100,
-                currentStep: 'ワークフロー完了',
-                result: result.value,
-                elapsedTime: difyEvent.data.elapsed_time,
-                totalTokens: difyEvent.data.total_tokens
-              })
-            } else {
-              error.value = difyEvent.data.error || 'ワークフローが失敗しました'
-              updateExecutionState({
-                status: 'error',
-                currentStep: 'ワークフロー失敗',
-                progress: 0,
-                error: error.value
-              })
-            }
-          }
-          break
-          
-        case 'error':
-          if ('data' in difyEvent && difyEvent.data) {
-            const errorMessage = difyEvent.data.message || 'ワークフローエラーが発生しました'
-            error.value = errorMessage
-            streamingText.value.isStreaming = false
+          } else {
+            // 失敗時の処理
+            error.value = event.data.error || 'ワークフローが失敗しました'
             updateExecutionState({
               status: 'error',
-              currentStep: 'エラーが発生しました',
+              currentStep: 'ワークフロー失敗',
               progress: 0,
-              error: errorMessage
+              error: error.value
             })
           }
-          break
-      }
-      
-      // 進捗コールバックを呼び出し
-      options.onProgress?.(executionState.value)
+        }
+        break
+        
+      case 'error':
+        // 標準Difyエラー処理
+        if (event.data) {
+          const errorMessage = event.data.message || 'ワークフローエラーが発生しました'
+          error.value = errorMessage
+          streamingText.value.isStreaming = false
+          updateExecutionState({
+            status: 'error',
+            currentStep: 'エラーが発生しました',
+            progress: 0,
+            error: errorMessage
+          })
+        }
+        break
+        
+      case 'ping':
+        // 接続維持イベント（ログのみ）
+        console.debug('Received ping event to maintain connection')
+        break
+        
+      default:
+        // 未知のイベントタイプ
+        console.log('Unknown Dify event type:', event.event, event)
+        break
     }
+    
+    // 進捗コールバックを呼び出し
+    options.onProgress?.(executionState.value)
   }
 
   /**
@@ -376,7 +394,7 @@ export const useDifyWorkflow = () => {
     eventLog: readonly(eventLog),
     result: readonly(result),
     error: readonly(error),
-    streamingText: readonly(streamingText),  // 追加
+    streamingText: readonly(streamingText),
     executeWorkflow,
     resetState,
     cancelExecution,
@@ -384,6 +402,6 @@ export const useDifyWorkflow = () => {
     isExecuting,
     isCompleted,
     hasError,
-    setOnTextChunk  // 追加
+    setOnTextChunk
   }
 }
