@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  loan-approval-app:
+    build:
+      context: .
+      target: runtime
+      args:
+        NODE_ENV: production
+    
+    ports:
+      - "3000:3000"
+    
+    environment:
+      - NODE_ENV=production
+      - NITRO_PORT=3000
+      - NITRO_HOST=0.0.0.0
+      # Dify API設定（.envから読み込み）
+      - NUXT_DIFY_API_KEY=${DIFY_API_KEY:-}
+      - NUXT_DIFY_API_BASE_URL=${DIFY_API_BASE_URL:-https://api.dify.ai/v1}
+      - NUXT_DIFY_WORKFLOW_API_ENDPOINT=${DIFY_WORKFLOW_API_ENDPOINT:-https://api.dify.ai/v1/workflows/run}
+    
+    # リソース制限
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: '1.0'
+    
+    # 再起動ポリシー
+    restart: unless-stopped
+    
+    # ヘルスチェック設定
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # ログ設定
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 開発用リバースプロキシ（オプション）
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - loan-approval-app
+    profiles:
+      - development
