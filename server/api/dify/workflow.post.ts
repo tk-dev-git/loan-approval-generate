@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     const config = useRuntimeConfig()
     const difyApiKey = config.difyApiKey
     const difyBaseUrl = config.difyApiBaseUrl
-    
+
     if (!difyApiKey || !difyBaseUrl) {
       throw createError({
         statusCode: 500,
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
 
     // リクエストボディを取得
     const body = await readBody<WorkflowRequestBody>(event)
-    
+
     // 受信データのデバッグログ
     console.log('Workflow API: Received request body:', {
       hasFormData: !!body.formData,
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
       fileCount: body.fileIds?.length || 0,
       settlementInFormData: body.formData?.settlement
     })
-    
+
     if (!body.formData) {
       console.error('Workflow API: Missing formData in request body')
       throw createError({
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
         statusMessage: 'フォームデータが不正です'
       })
     }
-    
+
     // ファイルIDの検証
     if (!body.fileIds || body.fileIds.length === 0) {
       console.warn('Workflow API: No file IDs provided, proceeding without files')
@@ -64,14 +64,14 @@ export default defineEventHandler(async (event) => {
         employees: body.formData.employees || '',
         location: body.formData.location || '',
         business_description: body.formData.business_description || '',
-        
+
         // 融資詳細
         loan_amount: body.formData.loan_amount || 0,
         usage_type: body.formData.usage_type || '',
         specific_usage: body.formData.specific_usage || '',
         required_timing: body.formData.required_timing || '',
         funding_plan_details: body.formData.funding_plan_details || '',
-        
+
         // 返済条件
         loan_term: body.formData.loan_term || 0,
         grace_period: body.formData.grace_period || 0,
@@ -80,33 +80,35 @@ export default defineEventHandler(async (event) => {
         rate_type: body.formData.rate_type || '',
         repayment_source: body.formData.repayment_source || '',
         desired_execution_date: body.formData.desired_execution_date || '',
-        
+
         // 担保情報
         collateral_type: body.formData.collateral_type || '',
         collateral_details: body.formData.collateral_details || '',
         collateral_value: body.formData.collateral_value || 0,
         collateral_rank: body.formData.collateral_rank || '',
         guarantor_info: body.formData.guarantor_info || '',
-        
+
         // 銀行情報
         main_bank: body.formData.main_bank || '',
         our_bank_share: body.formData.our_bank_share || 0,
         other_banks_total: body.formData.other_banks_total || 0,
         other_banks_details: body.formData.other_banks_details || '',
         repayment_history: body.formData.repayment_history || '',
-        
+
         // その他の情報
-        additional_info: body.formData.additional_info || ''
+        additional_info: body.formData.additional_info || '',
+
+        // 決算情報
+        settlement: (body.fileIds || []).map(fileId => ({
+          type: 'document' as const,
+          transfer_method: 'local_file' as const,
+          upload_file_id: fileId
+        }))
       },
       response_mode: 'streaming',
       user: 'loan-system-user',
-      files: (body.fileIds || []).map(fileId => ({
-        type: 'document' as const,
-        transfer_method: 'local_file' as const,
-        upload_file_id: fileId
-      }))
     }
-    
+
     // ワークフローリクエストのデバッグログ
     console.log('Workflow API: Prepared Dify request:', {
       inputKeys: Object.keys(workflowRequest.inputs),
@@ -191,7 +193,7 @@ async function executeWorkflow(
     try {
       while (true) {
         const { done, value } = await reader.read()
-        
+
         if (done) {
           break
         }
@@ -199,19 +201,19 @@ async function executeWorkflow(
         // チャンクを文字列に変換
         const chunk = decoder.decode(value, { stream: true })
         eventBuffer += chunk
-        
+
         // ダブル改行でイベントを分離
         const events = eventBuffer.split('\n\n')
         eventBuffer = events.pop() || ''  // 未完了部分をバッファに保持
 
         for (const eventBlock of events) {
           if (eventBlock.trim() === '') continue
-          
+
           const lines = eventBlock.split('\n')
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const eventData = line.slice(6).trim()
-              
+
               if (eventData === '[DONE]') {
                 // 完了イベントを送信
                 await stream.push({
@@ -228,7 +230,7 @@ async function executeWorkflow(
                 // Difyイベントを直接転送（標準SSE形式）
                 console.log('Workflow API: Processing Dify event, length:', eventData.length)
                 const difyEvent: DifyWorkflowStreamEvent = JSON.parse(eventData)
-                
+
                 // 全てのDifyイベントを標準形式で転送
                 await stream.push({
                   event: difyEvent.event,
@@ -240,7 +242,7 @@ async function executeWorkflow(
                   console.error('Dify workflow error:', difyEvent)
                   return
                 }
-                
+
                 // workflow_finishedで正常終了
                 if (difyEvent.event === 'workflow_finished') {
                   console.log('Workflow finished:', difyEvent.data?.status)
@@ -261,7 +263,7 @@ async function executeWorkflow(
 
   } catch (error: any) {
     console.error('Workflow execution failed:', error)
-    
+
     // 標準エラーイベントを送信
     await stream.push({
       event: 'error',
