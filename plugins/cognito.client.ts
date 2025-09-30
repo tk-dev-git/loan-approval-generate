@@ -99,7 +99,12 @@ export default defineNuxtPlugin((nuxtApp) => {
     RedirectUriSignOut: config.signOutUri,
     UserPoolId: config.userPoolId,
     AdvancedSecurityDataCollectionFlag: false,
-    Storage: window.localStorage
+    Storage: window.localStorage,
+    LaunchUri: (uri: string) => {
+      const url = new URL(uri, window.location.origin)
+      url.searchParams.set('lang', 'ja')
+      window.location.assign(url.toString())
+    }
   }
 
   const cognitoAuth = new CognitoAuth(authData)

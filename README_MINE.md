@@ -9,4 +9,6 @@
 
 - 認証アカウント
     1. `taishi.kikunaga@gmail.com` / `XEx!mVj2`
+    2. `taishi.kikunaga@rslvr.biz` / `Ume!Zr}3`
+    
     
