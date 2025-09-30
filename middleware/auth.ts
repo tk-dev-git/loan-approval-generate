@@ -1,8 +1,19 @@
 // middleware/auth.ts
-export default defineNuxtRouteMiddleware((to, from) => {
-    const { loggedIn, login } = useKeycloak()
+import { abortNavigation } from '#app'
 
-    if (!loggedIn.value && to.path !== '/login') {
-        return login()
-    }
+export default defineNuxtRouteMiddleware(() => {
+  if (process.server) {
+    return
+  }
+
+  const auth = useCognitoAuth()
+
+  if (auth.isInitializing.value) {
+    return
+  }
+
+  if (!auth.loggedIn.value) {
+    auth.login()
+    return abortNavigation()
+  }
 })

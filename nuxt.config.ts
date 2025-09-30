@@ -12,7 +12,6 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/google-fonts',
     '@vueuse/nuxt'
-    // '@nuxtjs/keycloak'
   ],
   googleFonts: {
     families: {
@@ -21,12 +20,6 @@ export default defineNuxtConfig({
     },
     display: 'swap'
   },
-  keycloak: {
-    url: process.env.KEYCLOAK_URL || 'http://localhost:8080',
-    realm: process.env.KEYCLOAK_REALM || 'your-realm',
-    clientId: process.env.KEYCLOAK_CLIENT_ID || 'your-client-id',
-    redirectUri: process.env.KEYCLOAK_REDIRECT_URI || 'http://localhost:3000'
-  },
   runtimeConfig: {
     // Private keys (only available on server-side)
     difyApiKey: process.env.DIFY_API_KEY,
@@ -34,7 +27,12 @@ export default defineNuxtConfig({
     difyWorkflowApiEndpoint: process.env.DIFY_WORKFLOW_API_ENDPOINT || 'https://api.dify.ai/v1/workflows/run',
     // Public keys (exposed to client-side)
     public: {
-      
+      cognitoDomain: process.env.NUXT_PUBLIC_COGNITO_DOMAIN || '',
+      cognitoUserPoolId: process.env.NUXT_PUBLIC_COGNITO_USER_POOL_ID || '',
+      cognitoAppClientId: process.env.NUXT_PUBLIC_COGNITO_APP_CLIENT_ID || '',
+      cognitoRedirectUri: process.env.NUXT_PUBLIC_COGNITO_REDIRECT_URI || '',
+      cognitoSignOutUri: process.env.NUXT_PUBLIC_COGNITO_SIGNOUT_URI || '',
+      cognitoScopes: process.env.NUXT_PUBLIC_COGNITO_SCOPES || ''
     }
   }
 })
